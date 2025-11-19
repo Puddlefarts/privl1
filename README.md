@@ -9,6 +9,7 @@ A trustless, privacy-first Layer-1 blockchain with strong default privacy, progr
 - **Native DEX**: Built-in AMM with ve(3,3) tokenomics
 - **NFT Support**: Both public and private NFT standards
 - **AI Integration**: Oracle system and future zkML support
+- **Quantum Resistance**: Hybrid post-quantum cryptography for long-term security
 - **Trustless Design**: No admin keys, no trusted setup (Halo2), fully decentralized
 
 ## Architecture Overview
