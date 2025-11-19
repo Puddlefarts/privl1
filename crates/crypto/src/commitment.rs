@@ -3,49 +3,25 @@
 //! This module implements Pedersen commitments which are used throughout PRIVL1
 //! to hide transaction amounts while maintaining homomorphic properties.
 
-use ark_ec::{CurveGroup, Group};
-use ark_ff::{Field, UniformRand};
 use ark_std::rand::Rng;
-use pasta_curves::pallas;
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Sub};
 
-use crate::Result;
+use crate::{Point, Result, Scalar};
 
 /// A Pedersen commitment to a value
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Commitment {
     /// The elliptic curve point representing the commitment
-    point: pallas::Point,
-}
-
-// Custom serialization for Commitment since pallas::Point doesn't implement Serialize
-impl Serialize for Commitment {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Serialize as bytes
-        self.to_bytes().serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Commitment {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = <[u8; 32]>::deserialize(deserializer)?;
-        Commitment::from_bytes(&bytes).map_err(serde::de::Error::custom)
-    }
+    point: Point,
 }
 
 /// A homomorphic Pedersen commitment scheme
 pub struct PedersenCommitment {
     /// Generator for the value component
-    g: pallas::Point,
+    g: Point,
     /// Generator for the blinding factor
-    h: pallas::Point,
+    h: Point,
 }
 
 impl PedersenCommitment {
@@ -53,38 +29,38 @@ impl PedersenCommitment {
     pub fn new() -> Self {
         // Use standard generators for Pallas curve
         // In production, these would be generated via a transparent setup ceremony
-        let g = pallas::Point::generator();
+        let g = Point::generator();
 
         // Generate h = hash_to_curve("PRIVL1_PEDERSEN_H")
         // For now, using a simple deterministic derivation
         let h = {
-            let mut h = g;
+            let mut h_point = g;
             for _ in 0..128 {
-                h = h.double();
+                h_point = h_point + h_point; // Double the point
             }
-            h
+            h_point
         };
 
         Self { g, h }
     }
 
     /// Commit to a value with a random blinding factor
-    pub fn commit<R: Rng>(&self, value: u64, rng: &mut R) -> (Commitment, pallas::Scalar) {
-        let blinding = pallas::Scalar::rand(rng);
+    pub fn commit<R: Rng>(&self, value: u64, rng: &mut R) -> (Commitment, Scalar) {
+        let blinding = Scalar::random(rng);
         let commitment = self.commit_with_blinding(value, blinding);
         (commitment, blinding)
     }
 
     /// Commit to a value with a specific blinding factor
-    pub fn commit_with_blinding(&self, value: u64, blinding: pallas::Scalar) -> Commitment {
+    pub fn commit_with_blinding(&self, value: u64, blinding: Scalar) -> Commitment {
         // C = v*G + r*H
-        let value_scalar = pallas::Scalar::from(value);
-        let point = self.g.mul(value_scalar) + self.h.mul(blinding);
-        Commitment { point: point.into() }
+        let value_scalar = Scalar::from_inner(pasta_curves::pallas::Scalar::from(value));
+        let point = self.g.mul(&value_scalar) + self.h.mul(&blinding);
+        Commitment { point }
     }
 
     /// Verify that a commitment opens to a specific value and blinding factor
-    pub fn verify(&self, commitment: &Commitment, value: u64, blinding: pallas::Scalar) -> bool {
+    pub fn verify(&self, commitment: &Commitment, value: u64, blinding: Scalar) -> bool {
         let expected = self.commit_with_blinding(value, blinding);
         commitment == &expected
     }
@@ -92,7 +68,7 @@ impl PedersenCommitment {
     /// Create a commitment to zero (useful for dummy notes)
     pub fn zero() -> Commitment {
         Commitment {
-            point: pallas::Point::identity(),
+            point: Point::identity(),
         }
     }
 }
@@ -106,25 +82,19 @@ impl Default for PedersenCommitment {
 impl Commitment {
     /// Serialize commitment to bytes
     pub fn to_bytes(&self) -> [u8; 32] {
-        let mut bytes = [0u8; 32];
-        let compressed = self.point.into_affine();
-        // Serialize the x-coordinate and sign bit
-        // This is a placeholder - actual implementation would use proper serialization
-        bytes
+        self.point.to_bytes()
     }
 
     /// Deserialize commitment from bytes
     pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
-        // Placeholder for deserialization
-        // In production, this would properly deserialize the curve point
         Ok(Self {
-            point: pallas::Point::identity(),
+            point: Point::from_bytes(bytes)?,
         })
     }
 
     /// Check if this is the zero commitment
     pub fn is_zero(&self) -> bool {
-        self.point.is_zero()
+        self.point.is_identity()
     }
 }
 
@@ -165,7 +135,7 @@ impl ValueCommitment {
         value: u64,
         asset_id: [u8; 32],
         rng: &mut R,
-    ) -> (Self, pallas::Scalar) {
+    ) -> (Self, Scalar) {
         let pedersen = PedersenCommitment::new();
         let (commitment, blinding) = pedersen.commit(value, rng);
 
@@ -179,7 +149,7 @@ impl ValueCommitment {
     }
 
     /// Verify the value commitment
-    pub fn verify(&self, value: u64, blinding: pallas::Scalar) -> bool {
+    pub fn verify(&self, value: u64, blinding: Scalar) -> bool {
         let pedersen = PedersenCommitment::new();
         pedersen.verify(&self.commitment, value, blinding)
     }

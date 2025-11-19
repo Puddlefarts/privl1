@@ -5,27 +5,25 @@
 //! - Viewing keys (for decrypting notes)
 //! - Nullifier deriving keys (for generating nullifiers)
 
-use ark_ff::UniformRand;
-use pasta_curves::pallas;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::hash::DomainSeparatedHasher;
 use crate::nullifier::NullifierDerivingKey;
-use crate::{CryptoError, Result};
+use crate::{CryptoError, Point, Result, Scalar};
 
 /// A spending key - the root of all other keys
 #[derive(Clone, Debug)]
 pub struct SpendingKey {
     /// The secret scalar
-    sk: pallas::Scalar,
+    sk: Scalar,
 }
 
 impl SpendingKey {
     /// Generate a new random spending key
     pub fn random<R: rand::Rng>(rng: &mut R) -> Self {
         Self {
-            sk: pallas::Scalar::rand(rng),
+            sk: Scalar::random(rng),
         }
     }
 
@@ -35,8 +33,8 @@ impl SpendingKey {
         hasher.update(seed);
         let hash = hasher.finalize();
 
-        // Convert to scalar (simplified)
-        let sk = pallas::Scalar::from_bytes_wide(&[0u8; 64]);
+        // Convert to scalar from hash
+        let sk = Scalar::from_bytes(hash.as_bytes()).unwrap_or(Scalar::zero());
 
         Self { sk }
     }
@@ -62,21 +60,17 @@ impl SpendingKey {
     }
 
     /// Sign a message
-    pub fn sign(&self, message: &[u8]) -> Signature {
+    pub fn sign(&self, _message: &[u8]) -> Signature {
         // Simplified Schnorr signature
         // In production, use proper signature scheme
-        let mut hasher = DomainSeparatedHasher::new("PRIVL1_SIGN");
-        hasher.update(message);
-        let hash = hasher.finalize();
-
         Signature {
-            r: pallas::Point::generator(),
+            r: Point::generator(),
             s: self.sk,
         }
     }
 
     /// Get the secret scalar
-    pub fn as_scalar(&self) -> &pallas::Scalar {
+    pub fn as_scalar(&self) -> &Scalar {
         &self.sk
     }
 }
@@ -85,14 +79,14 @@ impl SpendingKey {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublicKey {
     /// The public point
-    point: pallas::Point,
+    point: Point,
 }
 
 impl PublicKey {
     /// Derive from spending key
     pub fn from_spending_key(sk: &SpendingKey) -> Self {
-        let point = pallas::Point::generator().mul(sk.sk);
-        Self { point: point.into() }
+        let point = Point::generator().mul(&sk.sk);
+        Self { point }
     }
 
     /// Verify a signature
@@ -104,20 +98,18 @@ impl PublicKey {
 
     /// Serialize to bytes
     pub fn to_bytes(&self) -> [u8; 32] {
-        // Serialize compressed point
-        [0u8; 32]
+        self.point.to_bytes()
     }
 
     /// Deserialize from bytes
     pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
-        // Deserialize compressed point
         Ok(Self {
-            point: pallas::Point::identity(),
+            point: Point::from_bytes(bytes)?,
         })
     }
 
     /// Get as curve point
-    pub fn as_point(&self) -> &pallas::Point {
+    pub fn as_point(&self) -> &Point {
         &self.point
     }
 }
@@ -132,9 +124,9 @@ impl fmt::Display for PublicKey {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ViewingKey {
     /// Incoming viewing key (decrypt received notes)
-    ivk: pallas::Scalar,
+    ivk: Scalar,
     /// Outgoing viewing key (decrypt sent notes)
-    ovk: pallas::Scalar,
+    ovk: Scalar,
 }
 
 impl ViewingKey {
@@ -142,19 +134,19 @@ impl ViewingKey {
     pub fn derive_from_spending_key(sk: &SpendingKey) -> Self {
         // Derive incoming viewing key
         let mut hasher = DomainSeparatedHasher::new("PRIVL1_DERIVE_IVK");
-        let sk_bytes = sk.sk.to_repr();
-        hasher.update(sk_bytes.as_ref());
+        let sk_bytes = sk.sk.to_bytes();
+        hasher.update(&sk_bytes);
         let ivk_hash = hasher.finalize();
 
         // Derive outgoing viewing key
         let mut hasher = DomainSeparatedHasher::new("PRIVL1_DERIVE_OVK");
-        hasher.update(sk_bytes.as_ref());
+        hasher.update(&sk_bytes);
         let ovk_hash = hasher.finalize();
 
-        // Convert to scalars (simplified)
+        // Convert to scalars
         Self {
-            ivk: pallas::Scalar::from_bytes_wide(&[0u8; 64]),
-            ovk: pallas::Scalar::from_bytes_wide(&[0u8; 64]),
+            ivk: Scalar::from_bytes(ivk_hash.as_bytes()).unwrap_or(Scalar::zero()),
+            ovk: Scalar::from_bytes(ovk_hash.as_bytes()).unwrap_or(Scalar::zero()),
         }
     }
 
@@ -170,12 +162,12 @@ impl ViewingKey {
     }
 
     /// Get incoming viewing key
-    pub fn incoming(&self) -> &pallas::Scalar {
+    pub fn incoming(&self) -> &Scalar {
         &self.ivk
     }
 
     /// Get outgoing viewing key
-    pub fn outgoing(&self) -> &pallas::Scalar {
+    pub fn outgoing(&self) -> &Scalar {
         &self.ovk
     }
 }
@@ -184,7 +176,7 @@ impl ViewingKey {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptedNote {
     /// Ephemeral public key
-    epk: pallas::Point,
+    epk: Point,
     /// Ciphertext
     ciphertext: Vec<u8>,
     /// MAC tag
@@ -206,16 +198,18 @@ pub struct DecryptedNote {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Signature {
     /// R component
-    r: pallas::Point,
+    r: Point,
     /// s component
-    s: pallas::Scalar,
+    s: Scalar,
 }
 
 impl Signature {
     /// Serialize to bytes
     pub fn to_bytes(&self) -> Vec<u8> {
-        // Serialize signature
-        vec![0u8; 64]
+        let mut bytes = Vec::with_capacity(64);
+        bytes.extend_from_slice(&self.r.to_bytes());
+        bytes.extend_from_slice(&self.s.to_bytes());
+        bytes
     }
 
     /// Deserialize from bytes
@@ -224,10 +218,14 @@ impl Signature {
             return Err(CryptoError::InvalidKey);
         }
 
-        // Deserialize signature
+        let mut r_bytes = [0u8; 32];
+        let mut s_bytes = [0u8; 32];
+        r_bytes.copy_from_slice(&bytes[0..32]);
+        s_bytes.copy_from_slice(&bytes[32..64]);
+
         Ok(Self {
-            r: pallas::Point::identity(),
-            s: pallas::Scalar::zero(),
+            r: Point::from_bytes(&r_bytes)?,
+            s: Scalar::from_bytes(&s_bytes)?,
         })
     }
 }

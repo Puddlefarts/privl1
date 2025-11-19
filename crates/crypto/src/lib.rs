@@ -13,8 +13,10 @@ pub mod keys;
 pub mod merkle;
 pub mod note;
 pub mod nullifier;
+pub mod point;
 pub mod primitives;
 pub mod proof;
+pub mod scalar;
 
 // Re-export commonly used types
 pub use commitment::{Commitment, PedersenCommitment};
@@ -23,6 +25,8 @@ pub use keys::{PublicKey, SpendingKey, ViewingKey};
 pub use merkle::{IncrementalMerkleTree, MerkleProof, MerkleRoot};
 pub use note::{Note, NoteCommitment};
 pub use nullifier::{Nullifier, NullifierDerivingKey};
+pub use point::Point;
+pub use scalar::Scalar;
 
 /// Common error type for cryptographic operations
 #[derive(Debug, thiserror::Error)]
