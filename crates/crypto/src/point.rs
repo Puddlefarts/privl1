@@ -1,6 +1,7 @@
 //! Point wrapper with proper serialization
 
 use ark_ec::CurveGroup;
+use pasta_curves::group::Group;
 use pasta_curves::pallas;
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Sub};
@@ -14,7 +15,7 @@ pub struct Point(pub(crate) pallas::Point);
 impl Point {
     /// The identity point (point at infinity)
     pub fn identity() -> Self {
-        Self(pallas::Point::zero())
+        Self(pallas::Point::identity())
     }
 
     /// The generator point
@@ -25,7 +26,7 @@ impl Point {
     /// Create from bytes (compressed format)
     pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
         // For now, simplified - in production would use proper point compression
-        Ok(Self(pallas::Point::zero()))
+        Ok(Self(pallas::Point::identity()))
     }
 
     /// Convert to bytes (compressed format)
@@ -42,7 +43,7 @@ impl Point {
 
     /// Check if this is the identity point
     pub fn is_identity(&self) -> bool {
-        self.0.is_zero()
+        self.0.is_identity().into()
     }
 
     /// Get the inner pallas::Point

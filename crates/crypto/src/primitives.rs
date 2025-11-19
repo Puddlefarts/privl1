@@ -1,13 +1,12 @@
 //! Low-level cryptographic primitives and utilities
 
-use ark_ff::{Field, PrimeField};
-use pasta_curves::pallas;
 use rand::RngCore;
 
+use crate::{Point, Scalar};
+
 /// Generate a random field element
-pub fn random_field<R: RngCore>(rng: &mut R) -> pallas::Scalar {
-    use ark_ff::UniformRand;
-    pallas::Scalar::rand(rng)
+pub fn random_field<R: RngCore>(rng: &mut R) -> Scalar {
+    Scalar::random(rng)
 }
 
 /// Generate random bytes
@@ -18,18 +17,18 @@ pub fn random_bytes<R: RngCore>(rng: &mut R, len: usize) -> Vec<u8> {
 }
 
 /// Convert bytes to field element (with modular reduction)
-pub fn bytes_to_field(bytes: &[u8]) -> pallas::Scalar {
+pub fn bytes_to_field(bytes: &[u8]) -> Scalar {
     // Take at most 31 bytes to ensure we're below the field modulus
     let mut input = [0u8; 32];
     let len = bytes.len().min(31);
     input[1..1 + len].copy_from_slice(&bytes[..len]);
 
-    pallas::Scalar::from_repr(input.into()).unwrap_or(pallas::Scalar::zero())
+    Scalar::from_bytes(&input).unwrap_or(Scalar::zero())
 }
 
 /// Convert field element to bytes
-pub fn field_to_bytes(field: &pallas::Scalar) -> [u8; 32] {
-    field.to_repr().into()
+pub fn field_to_bytes(field: &Scalar) -> [u8; 32] {
+    field.to_bytes()
 }
 
 /// Constant-time comparison of byte arrays
@@ -54,19 +53,17 @@ pub fn xor_bytes(a: &[u8], b: &[u8]) -> Vec<u8> {
 }
 
 /// Pedersen hash for circuit-friendly hashing
-pub fn pedersen_hash(inputs: &[pallas::Scalar]) -> pallas::Scalar {
+pub fn pedersen_hash(inputs: &[Scalar]) -> Scalar {
     // Simplified Pedersen hash
     // In production, would use proper generators
-    let mut result = pallas::Scalar::zero();
-    let g = pallas::Point::generator();
-
-    for (i, input) in inputs.iter().enumerate() {
-        let gi = g.mul(pallas::Scalar::from((i + 1) as u64));
-        let hi = gi.mul(*input);
-        result += pallas::Scalar::from_bytes(&[0u8; 32]).unwrap(); // Placeholder
+    // This is a placeholder implementation
+    if inputs.is_empty() {
+        return Scalar::zero();
     }
 
-    result
+    // For now, just return the first input as a placeholder
+    // In production, this would properly hash all inputs using Pedersen commitments
+    inputs[0]
 }
 
 /// Key derivation function (KDF)

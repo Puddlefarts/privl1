@@ -42,8 +42,8 @@ impl SpendingKey {
     /// Derive the nullifier deriving key
     pub fn nullifier_key(&self) -> NullifierDerivingKey {
         let mut hasher = DomainSeparatedHasher::new("PRIVL1_DERIVE_NK");
-        let sk_bytes = self.sk.to_repr();
-        hasher.update(sk_bytes.as_ref());
+        let sk_bytes = self.sk.to_bytes();
+        hasher.update(&sk_bytes);
         let hash = hasher.finalize();
 
         NullifierDerivingKey::from_seed(hash.as_bytes())
@@ -176,11 +176,11 @@ impl ViewingKey {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptedNote {
     /// Ephemeral public key
-    epk: Point,
+    pub epk: Point,
     /// Ciphertext
-    ciphertext: Vec<u8>,
+    pub ciphertext: Vec<u8>,
     /// MAC tag
-    tag: [u8; 16],
+    pub tag: [u8; 16],
 }
 
 /// A decrypted note

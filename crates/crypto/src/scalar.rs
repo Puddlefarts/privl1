@@ -1,6 +1,7 @@
 //! Scalar wrapper with proper serialization
 
-use ark_ff::{PrimeField, UniformRand};
+use ark_ff::UniformRand;
+use pasta_curves::group::ff::PrimeField;
 use pasta_curves::pallas;
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Mul, Sub};
@@ -24,13 +25,20 @@ impl Scalar {
 
     /// Generate a random scalar
     pub fn random<R: rand::RngCore>(rng: &mut R) -> Self {
-        Self(pallas::Scalar::rand(rng))
+        // Generate random u64 values and create scalar from raw representation
+        let val = [
+            rng.next_u64(),
+            rng.next_u64(),
+            rng.next_u64(),
+            rng.next_u64(),
+        ];
+        Self(pallas::Scalar::from_raw(val))
     }
 
     /// Create from bytes (little-endian)
     pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
         let repr: [u8; 32] = *bytes;
-        pallas::Scalar::from_repr(repr.into())
+        Option::from(pallas::Scalar::from_repr(repr.into()))
             .ok_or(CryptoError::InvalidKey)
             .map(Self)
     }

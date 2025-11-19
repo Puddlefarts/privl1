@@ -3,14 +3,13 @@
 //! Nullifiers are unique identifiers derived from notes that are revealed when
 //! the note is spent, preventing the same note from being spent twice.
 
-use pasta_curves::pallas;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
 
 use crate::hash::{Blake3Hash, DomainSeparatedHasher};
 use crate::note::Note;
-use crate::{CryptoError, Result};
+use crate::{CryptoError, Result, Scalar};
 
 /// A nullifier - reveals when a note is spent
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -49,18 +48,16 @@ impl fmt::Display for Nullifier {
 #[derive(Clone, Debug)]
 pub struct NullifierDerivingKey {
     /// The secret scalar
-    nk: pallas::Scalar,
+    nk: Scalar,
 }
 
-// Custom serialization for NullifierDerivingKey
+// Derive Serialize and Deserialize since Scalar now supports it
 impl Serialize for NullifierDerivingKey {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        // Serialize the scalar as bytes
-        let bytes = self.nk.to_repr();
-        bytes.as_ref().serialize(serializer)
+        self.nk.serialize(serializer)
     }
 }
 
@@ -69,13 +66,7 @@ impl<'de> Deserialize<'de> for NullifierDerivingKey {
     where
         D: serde::Deserializer<'de>,
     {
-        let bytes = <Vec<u8>>::deserialize(deserializer)?;
-        let mut repr = [0u8; 32];
-        repr.copy_from_slice(&bytes[..32.min(bytes.len())]);
-
-        let nk = pallas::Scalar::from_repr(repr.into())
-            .ok_or_else(|| serde::de::Error::custom("Invalid scalar"))?;
-
+        let nk = Scalar::deserialize(deserializer)?;
         Ok(Self { nk })
     }
 }
@@ -83,9 +74,8 @@ impl<'de> Deserialize<'de> for NullifierDerivingKey {
 impl NullifierDerivingKey {
     /// Generate a new random nullifier deriving key
     pub fn random<R: rand::Rng>(rng: &mut R) -> Self {
-        use ark_ff::UniformRand;
         Self {
-            nk: pallas::Scalar::rand(rng),
+            nk: Scalar::random(rng),
         }
     }
 
@@ -97,7 +87,7 @@ impl NullifierDerivingKey {
         let hash = hasher.finalize();
 
         // Convert hash to scalar
-        let nk = pallas::Scalar::from_bytes_wide(&[0u8; 64]); // Simplified
+        let nk = Scalar::from_bytes(hash.as_bytes()).unwrap_or(Scalar::zero());
 
         Self { nk }
     }
@@ -108,8 +98,8 @@ impl NullifierDerivingKey {
         let mut hasher = DomainSeparatedHasher::new("PRIVL1_NULLIFIER");
 
         // Add nullifier key
-        let nk_bytes = self.nk.to_repr();
-        hasher.update(nk_bytes.as_ref());
+        let nk_bytes = self.nk.to_bytes();
+        hasher.update(&nk_bytes);
 
         // Add note commitment
         hasher.update(note.commitment().to_bytes().as_ref());
@@ -122,7 +112,7 @@ impl NullifierDerivingKey {
     }
 
     /// Get the underlying scalar
-    pub fn as_scalar(&self) -> &pallas::Scalar {
+    pub fn as_scalar(&self) -> &Scalar {
         &self.nk
     }
 }

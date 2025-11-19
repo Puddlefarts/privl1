@@ -5,11 +5,10 @@
 //! - Poseidon: ZK-friendly algebraic hash function
 
 use blake3::Hasher as Blake3Hasher;
+use pasta_curves::group::ff::PrimeField;
 use pasta_curves::pallas;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-use crate::Result;
 
 /// Trait for hash functions
 pub trait Hasher: Clone {
@@ -103,7 +102,7 @@ impl Hasher for Blake3 {
 }
 
 /// Poseidon hash (ZK-friendly)
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PoseidonHash(pallas::Base);
 
 impl PoseidonHash {
@@ -177,7 +176,7 @@ impl AsRef<[u8]> for PoseidonHash {
 }
 
 /// Generic hash type that can use different hash functions
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Hash {
     Blake3(Blake3Hash),
     Poseidon(PoseidonHash),

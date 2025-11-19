@@ -3,14 +3,13 @@
 //! Notes are the fundamental unit of value in PRIVL1, similar to UTXOs
 //! but with privacy-preserving properties via commitments.
 
-use pasta_curves::pallas;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::commitment::{Commitment, PedersenCommitment};
 use crate::hash::Blake3Hash;
 use crate::keys::{EncryptedNote, PublicKey, ViewingKey};
-use crate::{CryptoError, Result};
+use crate::{CryptoError, Point, Result, Scalar};
 
 /// A note representing value in the system
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -22,7 +21,7 @@ pub struct Note {
     /// The owner's public key
     owner: PublicKey,
     /// Random blinding factor
-    randomness: pallas::Scalar,
+    randomness: Scalar,
     /// Optional memo (encrypted)
     memo: Option<Vec<u8>>,
     /// Cached commitment (for the simplified test version)
@@ -33,7 +32,6 @@ pub struct Note {
 impl Note {
     /// Create a new note (simplified for testing - uses provided commitment)
     pub fn new(value: u64, commitment: Commitment, asset_id: [u8; 32]) -> Self {
-        use ark_ff::UniformRand;
         let mut rng = rand::thread_rng();
 
         // For testing, we'll create a simplified note with dummy owner
@@ -43,7 +41,7 @@ impl Note {
             value,
             asset_id,
             owner,
-            randomness: pallas::Scalar::rand(&mut rng),
+            randomness: Scalar::random(&mut rng),
             memo: None,
             cached_commitment: Some(commitment),
         }
@@ -51,14 +49,13 @@ impl Note {
 
     /// Create a new note with owner
     pub fn new_with_owner(value: u64, owner: PublicKey, asset_id: [u8; 32]) -> Self {
-        use ark_ff::UniformRand;
         let mut rng = rand::thread_rng();
 
         Self {
             value,
             asset_id,
             owner,
-            randomness: pallas::Scalar::rand(&mut rng),
+            randomness: Scalar::random(&mut rng),
             memo: None,
             cached_commitment: None,
         }
@@ -69,7 +66,7 @@ impl Note {
         value: u64,
         owner: PublicKey,
         asset_id: [u8; 32],
-        randomness: pallas::Scalar,
+        randomness: Scalar,
     ) -> Self {
         Self {
             value,
@@ -103,7 +100,7 @@ impl Note {
     }
 
     /// Get the randomness
-    pub fn randomness(&self) -> &pallas::Scalar {
+    pub fn randomness(&self) -> &Scalar {
         &self.randomness
     }
 
@@ -131,7 +128,7 @@ impl Note {
         // Simplified encryption
         // In production, use proper encryption (ChaCha20Poly1305)
         EncryptedNote {
-            epk: pallas::Point::identity(),
+            epk: Point::identity(),
             ciphertext: vec![],
             tag: [0u8; 16],
         }
@@ -145,8 +142,9 @@ impl Note {
             value: decrypted.value,
             asset_id: decrypted.asset_id,
             owner: PublicKey::from_bytes(&[0u8; 32])?,
-            randomness: pallas::Scalar::zero(),
+            randomness: Scalar::zero(),
             memo: Some(decrypted.memo),
+            cached_commitment: None,
         })
     }
 
@@ -161,7 +159,7 @@ impl Note {
             value: 0,
             asset_id: [0u8; 32],
             owner: PublicKey::from_bytes(&[0u8; 32]).unwrap(),
-            randomness: pallas::Scalar::zero(),
+            randomness: Scalar::zero(),
             memo: None,
             cached_commitment: None,
         }
@@ -169,7 +167,7 @@ impl Note {
 
     /// Check if this is a dummy note
     pub fn is_dummy(&self) -> bool {
-        self.value == 0 && self.randomness == pallas::Scalar::zero()
+        self.value == 0 && self.randomness == Scalar::zero()
     }
 }
 
