@@ -1,0 +1,40 @@
+[package]
+name = "privl1-crypto"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ark-std = { workspace = true }
+ark-ff = { workspace = true }
+ark-ec = { workspace = true }
+ark-bls12-381 = { workspace = true }
+blake3 = { workspace = true }
+sha2 = { workspace = true }
+halo2_proofs = { workspace = true }
+halo2_gadgets = { workspace = true }
+pasta_curves = { workspace = true }
+serde = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# For Pedersen commitments
+group = "0.13"
+ff = "0.13"
+subtle = "2.5"
+
+# For key derivation
+hkdf = "0.12"
+chacha20poly1305 = "0.10"
+
+# For secure erasure
+zeroize = "1.7"
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
