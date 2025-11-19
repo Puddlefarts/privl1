@@ -1,0 +1,7 @@
+# After you create the repo on GitHub, run these:
+
+cd /home/sakas/projects/privl1
+git remote add origin https://github.com/puddlefarts/privl1.git
+git push -u origin main
+
+# That's it! Your code will be on GitHub.
