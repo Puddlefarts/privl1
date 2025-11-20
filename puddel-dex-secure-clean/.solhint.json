@@ -1,0 +1,19 @@
+{
+  "extends": "solhint:recommended",
+  "rules": {
+    "no-unused-vars": "error",
+    "security/no-inline-assembly": "error", 
+    "security/no-low-level-calls": "warn",
+    "security/no-call-value": "error",
+    "security/no-send": "error",
+    "security/no-suicide": "error",
+    "security/no-throw": "error",
+    "security/no-sha3": "error",
+    "security/no-block-members": "warn",
+    "security/no-tx-origin": "error",
+    "security/no-modifier-name": "error",
+    "reentrancy": "error",
+    "state-visibility": "error",
+    "func-visibility": "error"
+  }
+}

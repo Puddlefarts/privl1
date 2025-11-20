@@ -1,0 +1,19 @@
+{
+  "functions": {
+    "src/app/api/ai/chat/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/ai/generate-image/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/ai/test/route.ts": {
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    }
+  ]
+}

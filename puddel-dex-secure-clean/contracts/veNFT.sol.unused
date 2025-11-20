@@ -1,0 +1,314 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "./interfaces/IERC20.sol";
+import "./security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+/**
+ * @title veNFT - Visual Governance NFTs for PuddelSwap
+ * @notice Lock PeL tokens to mint evolving NFTs that represent voting power
+ */
+contract veNFT is ERC721, ERC721Enumerable, ReentrancyGuard, Ownable {
+    
+    // PeL token contract
+    IERC20 public immutable pelToken;
+    
+    // NFT ID counter
+    uint256 public nextTokenId = 1;
+    
+    // Lock duration tiers (in seconds)
+    uint256 public constant MONTH = 30 days;
+    uint256 public constant TIER_BRONZE = MONTH;        // 1 month
+    uint256 public constant TIER_SILVER = MONTH * 3;    // 3 months  
+    uint256 public constant TIER_GOLD = MONTH * 6;      // 6 months
+    uint256 public constant TIER_DIAMOND = 365 days;    // 1 year
+    uint256 public constant TIER_LEGENDARY = 365 days * 2; // 2 years
+    
+    // Multipliers (scaled by 100 for precision)
+    uint256 public constant MULTIPLIER_BRONZE = 100;     // 1x
+    uint256 public constant MULTIPLIER_SILVER = 150;     // 1.5x
+    uint256 public constant MULTIPLIER_GOLD = 200;       // 2x
+    uint256 public constant MULTIPLIER_DIAMOND = 300;    // 3x
+    uint256 public constant MULTIPLIER_LEGENDARY = 500;  // 5x
+    
+    // Lock information for each NFT
+    struct LockInfo {
+        uint256 amount;           // Amount of PeL locked
+        uint256 unlockTime;       // When tokens can be withdrawn
+        uint256 lockDuration;     // Original lock duration
+        uint256 multiplier;       // Voting power multiplier
+        uint256 tier;            // Visual tier (1-5)
+        uint256 createdAt;       // Creation timestamp
+        uint256 lastVoteTime;    // Last governance participation
+        uint256 voteCount;       // Total votes participated in
+        uint256 xp;              // Experience points
+    }
+    
+    // Mapping from token ID to lock info
+    mapping(uint256 => LockInfo) public lockInfo;
+    
+    // Total locked PeL
+    uint256 public totalLocked;
+    
+    // Total voting power (accounts for multipliers)
+    uint256 public totalVotingPower;
+    
+    // Events
+    event Lock(address indexed user, uint256 indexed tokenId, uint256 amount, uint256 duration);
+    event Unlock(address indexed user, uint256 indexed tokenId, uint256 amount);
+    event ExtendLock(uint256 indexed tokenId, uint256 newUnlockTime);
+    event XPGained(uint256 indexed tokenId, uint256 xp, string reason);
+    event VoteRecorded(uint256 indexed tokenId, uint256 proposalId);
+    
+    constructor(address _pelToken) ERC721("PuddelSwap veNFT", "veNFT") {
+        pelToken = IERC20(_pelToken);
+    }
+    
+    /**
+     * @notice Lock PeL tokens to mint a veNFT
+     * @param amount Amount of PeL to lock
+     * @param duration Lock duration in seconds
+     */
+    function lock(uint256 amount, uint256 duration) external nonReentrant returns (uint256) {
+        require(amount > 0, "Amount must be greater than 0");
+        require(duration >= TIER_BRONZE, "Minimum lock is 1 month");
+        require(duration <= TIER_LEGENDARY, "Maximum lock is 2 years");
+        
+        // Transfer PeL tokens from user
+        require(pelToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        
+        // Determine tier and multiplier
+        (uint256 tier, uint256 multiplier) = getTierAndMultiplier(duration);
+        
+        // Mint NFT
+        uint256 tokenId = nextTokenId++;
+        _safeMint(msg.sender, tokenId);
+        
+        // Calculate voting power
+        uint256 votingPower = (amount * multiplier) / 100;
+        
+        // Store lock info
+        lockInfo[tokenId] = LockInfo({
+            amount: amount,
+            unlockTime: block.timestamp + duration,
+            lockDuration: duration,
+            multiplier: multiplier,
+            tier: tier,
+            createdAt: block.timestamp,
+            lastVoteTime: 0,
+            voteCount: 0,
+            xp: 0
+        });
+        
+        // Update totals
+        totalLocked += amount;
+        totalVotingPower += votingPower;
+        
+        emit Lock(msg.sender, tokenId, amount, duration);
+        
+        return tokenId;
+    }
+    
+    /**
+     * @notice Unlock tokens after lock period expires
+     * @param tokenId The NFT to unlock
+     */
+    function unlock(uint256 tokenId) external nonReentrant {
+        require(ownerOf(tokenId) == msg.sender, "Not token owner");
+        
+        LockInfo memory info = lockInfo[tokenId];
+        require(block.timestamp >= info.unlockTime, "Still locked");
+        
+        uint256 amount = info.amount;
+        uint256 votingPower = (amount * info.multiplier) / 100;
+        
+        // Clear lock info
+        delete lockInfo[tokenId];
+        
+        // Burn NFT
+        _burn(tokenId);
+        
+        // Update totals
+        totalLocked -= amount;
+        totalVotingPower -= votingPower;
+        
+        // Transfer PeL back to user
+        require(pelToken.transfer(msg.sender, amount), "Transfer failed");
+        
+        emit Unlock(msg.sender, tokenId, amount);
+    }
+    
+    /**
+     * @notice Extend lock duration for more rewards
+     * @param tokenId The NFT to extend
+     * @param additionalDuration Additional lock time
+     */
+    function extendLock(uint256 tokenId, uint256 additionalDuration) external {
+        require(ownerOf(tokenId) == msg.sender, "Not token owner");
+        
+        LockInfo storage info = lockInfo[tokenId];
+        uint256 newUnlockTime = info.unlockTime + additionalDuration;
+        uint256 newTotalDuration = newUnlockTime - info.createdAt;
+        
+        require(newTotalDuration <= TIER_LEGENDARY, "Cannot exceed max duration");
+        
+        // Recalculate tier and multiplier
+        (uint256 newTier, uint256 newMultiplier) = getTierAndMultiplier(newTotalDuration);
+        
+        // Update voting power
+        uint256 oldVotingPower = (info.amount * info.multiplier) / 100;
+        uint256 newVotingPower = (info.amount * newMultiplier) / 100;
+        
+        totalVotingPower = totalVotingPower - oldVotingPower + newVotingPower;
+        
+        // Update lock info
+        info.unlockTime = newUnlockTime;
+        info.lockDuration = newTotalDuration;
+        info.multiplier = newMultiplier;
+        info.tier = newTier;
+        
+        // Bonus XP for extending
+        info.xp += 100;
+        emit XPGained(tokenId, 100, "Lock extended");
+        
+        emit ExtendLock(tokenId, newUnlockTime);
+    }
+    
+    /**
+     * @notice Record governance participation
+     * @param tokenId The NFT that voted
+     * @param proposalId The proposal voted on
+     */
+    function recordVote(uint256 tokenId, uint256 proposalId) external onlyOwner {
+        LockInfo storage info = lockInfo[tokenId];
+        
+        info.lastVoteTime = block.timestamp;
+        info.voteCount++;
+        info.xp += 10;
+        
+        emit XPGained(tokenId, 10, "Voted on proposal");
+        emit VoteRecorded(tokenId, proposalId);
+    }
+    
+    /**
+     * @notice Get voting power for an NFT
+     * @param tokenId The NFT ID
+     */
+    function getVotingPower(uint256 tokenId) external view returns (uint256) {
+        LockInfo memory info = lockInfo[tokenId];
+        return (info.amount * info.multiplier) / 100;
+    }
+    
+    /**
+     * @notice Get all NFTs owned by an address
+     * @param owner The address to query
+     */
+    function getNFTsByOwner(address owner) external view returns (uint256[] memory) {
+        uint256 balance = balanceOf(owner);
+        uint256[] memory tokens = new uint256[](balance);
+        
+        for (uint256 i = 0; i < balance; i++) {
+            tokens[i] = tokenOfOwnerByIndex(owner, i);
+        }
+        
+        return tokens;
+    }
+    
+    /**
+     * @notice Get total voting power for an address
+     * @param owner The address to query
+     */
+    function getTotalVotingPower(address owner) external view returns (uint256) {
+        uint256 balance = balanceOf(owner);
+        uint256 totalPower = 0;
+        
+        for (uint256 i = 0; i < balance; i++) {
+            uint256 tokenId = tokenOfOwnerByIndex(owner, i);
+            LockInfo memory info = lockInfo[tokenId];
+            totalPower += (info.amount * info.multiplier) / 100;
+        }
+        
+        return totalPower;
+    }
+    
+    /**
+     * @notice Determine tier and multiplier based on lock duration
+     */
+    function getTierAndMultiplier(uint256 duration) public pure returns (uint256 tier, uint256 multiplier) {
+        if (duration >= TIER_LEGENDARY) {
+            return (5, MULTIPLIER_LEGENDARY);
+        } else if (duration >= TIER_DIAMOND) {
+            return (4, MULTIPLIER_DIAMOND);
+        } else if (duration >= TIER_GOLD) {
+            return (3, MULTIPLIER_GOLD);
+        } else if (duration >= TIER_SILVER) {
+            return (2, MULTIPLIER_SILVER);
+        } else {
+            return (1, MULTIPLIER_BRONZE);
+        }
+    }
+    
+    /**
+     * @notice Generate metadata URI for NFT visuals
+     * @param tokenId The NFT ID
+     */
+    function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+        require(_exists(tokenId), "Token does not exist");
+        
+        // In production, this would point to a metadata API that generates
+        // dynamic JSON based on the NFT's attributes
+        // For now, return a placeholder
+        return string(abi.encodePacked(
+            "https://api.puddelswap.com/venft/metadata/",
+            toString(tokenId)
+        ));
+    }
+    
+    /**
+     * @notice Helper function to convert uint to string
+     */
+    function toString(uint256 value) internal pure returns (string memory) {
+        if (value == 0) {
+            return "0";
+        }
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) {
+            digits++;
+            temp /= 10;
+        }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits -= 1;
+            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
+    }
+    
+    // Required overrides for ERC721Enumerable
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 batchSize
+    ) internal override(ERC721, ERC721Enumerable) {
+        super._beforeTokenTransfer(from, to, tokenId, batchSize);
+    }
+    
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721, ERC721Enumerable)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
+    }
+    
+    function _exists(uint256 tokenId) internal view returns (bool) {
+        return _ownerOf(tokenId) != address(0);
+    }
+}

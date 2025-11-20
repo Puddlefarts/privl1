@@ -1,0 +1,72 @@
+# =============================================================================
+# PUDDEL DEX .GITATTRIBUTES - PROFESSIONAL STANDARDS
+# =============================================================================
+
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Force LF for all text files to prevent Windows CRLF issues
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sol text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.gitignore text eol=lf
+*.gitattributes text eol=lf
+
+# Configuration files
+*.config.js text eol=lf
+*.config.ts text eol=lf
+hardhat.config.js text eol=lf
+next.config.js text eol=lf
+tailwind.config.js text eol=lf
+tsconfig.json text eol=lf
+package.json text eol=lf
+
+# Documentation
+README* text eol=lf
+LICENSE text eol=lf
+CHANGELOG* text eol=lf
+SECURITY* text eol=lf
+
+# Mark generated or binary files appropriately for GitHub statistics
+package-lock.json linguist-generated=true
+yarn.lock linguist-generated=true
+*.min.js linguist-generated=true
+*.min.css linguist-generated=true
+artifacts/ linguist-generated=true
+cache/ linguist-generated=true
+coverage/ linguist-generated=true
+node_modules/ linguist-vendored=true
+
+# Contract artifacts and ABIs
+src/contracts/abis.ts linguist-generated=true
+contracts/artifacts/ linguist-generated=true
+
+# Binary files - ensure they remain unchanged
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Archives - treat as binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.7z binary
+*.rar binary
+
+# =============================================================================
+# END OF .GITATTRIBUTES
+# =============================================================================

@@ -1,0 +1,126 @@
+# =============================================================================
+# SECURITY-CRITICAL .GITIGNORE - PUDDEL DEX
+# =============================================================================
+# This file prevents accidental commits of sensitive data
+# NEVER modify the security sections below
+
+# =============================================================================
+# 🚨 CRITICAL SECURITY EXCLUSIONS 🚨
+# =============================================================================
+
+# SECURITY: Block any file that might contain private keys
+*private*key*
+*secret*
+*mnemonic*
+*seed*phrase*
+*wallet*json
+*keystore*
+*.pem
+*.p12
+*.pfx
+
+# SECURITY: Environment files (may contain private keys)
+.env
+.env.*
+!.env.example
+.environment
+environment.js
+environment.ts
+
+# SECURITY: Secure directories - NEVER COMMIT
+secure-private/
+/secure-private/
+**/secure-private/
+secure-wallets/
+wallets/
+keys/
+
+# SECURITY: Deployment records that may contain addresses
+deployments/*.json
+deploy-*.json
+*-deployment.json
+deployment-config.json
+deployed-addresses.json
+*.secret.json
+.trezor-cache
+
+# SECURITY: Scripts that might contain hardcoded values
+*-debug.js
+*-test-*.js
+debug-*.js
+
+# SECURITY: Backup files that might contain sensitive data
+*.backup
+*.bak
+*.old
+*_backup*
+*.orig
+
+# =============================================================================
+# 📱 STANDARD DEVELOPMENT EXCLUSIONS
+# =============================================================================
+
+# Dependencies
+node_modules/
+.npm
+.yarn
+yarn-error.log
+package-lock.json
+
+# Build outputs
+dist/
+build/
+artifacts/
+cache/
+coverage/
+
+# Environment and config
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Hardhat
+artifacts/
+cache/
+coverage/
+*.coverage
+
+# TypeScript
+*.tsbuildinfo
+
+# Next.js
+.next/
+out/
+
+# Vercel
+.vercel
+
+# =============================================================================
+# 🔬 TESTING AND LOGS
+# =============================================================================
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =============================================================================
+# END OF .GITIGNORE
+# =============================================================================.env.local.real
